@@ -14,9 +14,9 @@ af = norm(A,'fro');
 mvs = 0;
 noexpand = 1;
 hist = {};
-run = []; 
+run = [];
 i = 1;
- 
+
 %colors = lines(iter);
 
 tic
@@ -72,9 +72,15 @@ while mvs < MaxMV && toc < MaxTime && next <= MaxBasis
         %    semilogy(s+run,'Color',colors(floor(next/BlS),:));
     end
     
-    
     fprintf('Time: %f\t Iter: %d\t Matvecs: %d\t k: %d\t BlS: %d\t FroNorm: %d\n',toc,i,mvs,next,BlS,norm(s)/af);
     hist{i} = {toc, i, mvs, next, BlS, run, norm(s)/af};
+    
+    switch Criteria
+        case 1
+            if norm(s)/af > Args.delta
+                break;
+            end
+    end
     
     prev = cur;
     cur = next;

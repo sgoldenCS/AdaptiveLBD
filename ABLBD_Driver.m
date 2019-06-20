@@ -1,4 +1,4 @@
-function [U,S,V] = ABLBD_Driver(A,varargin)
+function [U,S,V,hist] = ABLBD_Driver(A,varargin)
 
 p = inputParser;
 
