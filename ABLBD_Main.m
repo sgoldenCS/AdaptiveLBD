@@ -1,21 +1,28 @@
 function [U,S,V,hist] = ABLBD_Main(arg)
 
 A = arg.A; k = arg.k; BlS = arg.BlockSize; Adapt = arg.Adaptive;
-MaxMV = arg.MaxMV; MaxBasis = arg.MaxBasis; MaxTime = arg.MaxTime;
-Criteria = arg.Criteria; Args = arg.CriteriaArgs;
+Criteria = uint32(arg.Criteria); delta = arg.Delta; alpha = arg.Alpha;
+MaxBasis = arg.MaxBasis; MaxMV = arg.MaxMV; MaxTime = arg.MaxTime;
+tol = arg.tol;
+
+if ~isempty(arg.Config)
+    run(arg.Config);
+end
 
 MaxBasis = min([floor((MaxMV+BlS)/2),MaxBasis,min(size(A))]);
 assert(BlS < MaxBasis);
-if k < 0
-    k = MaxBasis;
+
+if bitand(Criteria,32)
+    assert(k < MaxBasis); %Required for finite residual norms
 end
 
 af = norm(A,'fro');
 mvs = 0;
 noexpand = 1;
 hist = {};
-run = [];
+rnorm = [];
 i = 1;
+conv = uint32(0);
 
 %colors = lines(iter);
 
@@ -35,10 +42,10 @@ s = diag(sb);
 
 prev = 0; cur = BlS; next = 2*BlS;
 
-fprintf('Time: %f\t Iter: %d\t Matvecs: %d\t k: %d\t BlS: %d\t FroNorm: %d\n',toc,i,mvs,next,BlS,norm(s)/af);
-hist{i} = {toc, i, mvs, next, BlS, run, norm(s)/af};
+fprintf('Time: %f\t Iter: %d\t Matvecs: %d\t k: %d\t BlS: %d\t FroNorm: %d\n',toc,i,mvs,cur,BlS,norm(s)/af);
+hist{i} = {toc, i, mvs, cur, BlS, rnorm, norm(s)/af};
 
-while mvs < MaxMV && toc < MaxTime && next <= MaxBasis
+while ~bitand(conv,Criteria)
     i = i + 1;
     V(:,cur+1:next) = A'*U(:,prev+1:cur) - V(:,prev+1:cur)*B(prev+1:cur,prev+1:cur);
     mvs = mvs + BlS;
@@ -68,25 +75,43 @@ while mvs < MaxMV && toc < MaxTime && next <= MaxBasis
     %hold on; semilogy(s,'Color',colors(floor(next/BlS),:));
     
     if noexpand
-        run = sqrt(diag(ub(end-BlS+1:end,:)'*VtV*ub(end-BlS+1:end,:)));
+        rnorm = sqrt(diag(ub(end-BlS+1:end,:)'*VtV*ub(end-BlS+1:end,:)));
         %    semilogy(s+run,'Color',colors(floor(next/BlS),:));
     end
     
     fprintf('Time: %f\t Iter: %d\t Matvecs: %d\t k: %d\t BlS: %d\t FroNorm: %d\n',toc,i,mvs,next,BlS,norm(s)/af);
-    hist{i} = {toc, i, mvs, next, BlS, run, norm(s)/af};
+    hist{i} = {toc, i, mvs, next, BlS, rnorm, norm(s)/af};
     
-    switch Criteria
-        case 1
-            if norm(s)/af > Args.delta
-                break;
-            end
+    if bitand(Criteria,1) && norm(s)/af > delta
+        conv = bitor(conv, 1);
     end
+    if bitand(Criteria,2)
+        ind = find(rnorm+s(1:size(rnorm)) < alpha*s(1),1);
+        if rnorm(ind) < delta
+            conv = bitor(conv, 2);
+        end
+    end
+    if bitand(Criteria,4) && mvs > MaxMV
+        conv = bitor(conv, 4);
+    end
+    if bitand(Criteria,8) && toc > MaxTime
+        conv = bitor(conv, 8);
+    end
+    if bitand(Criteria,16) && next >= MaxBasis
+        conv = bitor(conv, 16);
+    end
+    if bitand(Criteria,32) && all(rnorm(1:k) < tol)
+        conv = bitor(conv, 32);
+    end
+    %Add local gap criteria
     
     prev = cur;
     cur = next;
     next = next + BlS;
 end
+
 U = U(:,1:cur)*ub(:,1:min(k,cur));
 S = sb(1:min(k,cur),1:min(k,cur));
 V = V(:,1:cur)*vb(:,1:min(k,cur));
+
 end
