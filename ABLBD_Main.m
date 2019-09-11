@@ -24,14 +24,13 @@ tic
 if MaxBasis ~= inf
     V = zeros(size(A,2),MaxBasis);
     U = zeros(size(A,1),MaxBasis);
-    B = zeros(MaxBasis,MaxBasis);
+    R = zeros(MaxBasis,MaxBasis);
 end
 
 [V(:,1:BlS),~] = qr(randn(size(A,2),BlS),0);
-[U(:,1:BlS),B(1:BlS,1:BlS)] = qr(A*V(:,1:BlS),0); mvs = mvs + BlS;
-R(1:BlS,1:BlS) = B(1:BlS,1:BlS);
-[ub,sb,vb] = svd(B(1:BlS,1:BlS));
-s = diag(sb);
+[U(:,1:BlS),R(1:BlS,1:BlS)] = qr(A*V(:,1:BlS),0); mvs = mvs + BlS;
+[ur,sr,vr] = svd(R(1:BlS,1:BlS));
+s = diag(sr);
 
 prev = 0; cur = BlS; next = 2*BlS;
 
@@ -45,7 +44,6 @@ while 1
     V(:,cur+1:next) = A'*U(:,prev+1:cur); mvs = mvs + BlS;
     [V(:,cur+1:next),tmp] = cgs(V(:,1:cur),V(:,cur+1:next));
     vr = tmp(cur+1:next,:);
-    B(prev+1:cur,cur+1:next) = vr';
     RtR = vr'*vr;
     
     %multiples = max(sum(abs(s - s')./s < Adapt)); %For newer versions
@@ -62,13 +60,12 @@ while 1
     U(:,cur+1:next) = A*V(:,cur+1:next); mvs = mvs + BlS;
     [U(:,cur+1:next),tmp] = cgs(U(:,1:cur),U(:,cur+1:next));
     R(1:next,cur+1:next) = tmp;
-    B(cur+1:next,cur+1:next) = tmp(cur+1:next,:);
     
-    [ub,sb,vb] = svd(R(1:next,1:next));
-    s = diag(sb);
+    [ur,sr,vr] = svd(R(1:next,1:next));
+    s = diag(sr);
 
     if noexpand
-        rnorm = sqrt(diag(ub(end-BlS+1:end,:)'*RtR*ub(end-BlS+1:end,:)));
+        rnorm = sqrt(diag(ur(end-BlS+1:end,:)'*RtR*ur(end-BlS+1:end,:)));
     end
     
     fprintf('Time: %f\t Iter: %d\t Matvecs: %d\t k: %d\t BlS: %d\t FroNorm: %d\t Multiples: %d\n',toc,i,mvs,next,BlS,norm(s)/af,multiples);
@@ -123,9 +120,9 @@ while 1
     next = next + BlS;
 end
 
-U = U(:,1:next)*ub(:,1:num_2_return);
-S = sb(1:num_2_return,1:num_2_return);
-V = V(:,1:next)*vb(:,1:num_2_return);
+U = U(:,1:next)*ur(:,1:num_2_return);
+S = sr(1:num_2_return,1:num_2_return);
+V = V(:,1:next)*vr(:,1:num_2_return);
 fprintf('Time: %f\t Iter: %d\t Matvecs: %d\t k: %d\t BlS: %d\t FroNorm: %d\t Multiples: %d\n',toc,i,mvs,next,BlS,norm(s)/af,multiples);
 hist{i} = {toc, i, mvs, cur, BlS, s, rnorm, norm(s)/af, multiples};
 end
